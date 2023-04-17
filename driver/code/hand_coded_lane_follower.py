@@ -7,7 +7,6 @@ import sys
 
 _SHOW_IMAGE = False
 
-
 class HandCodedLaneFollower(object):
 
     def __init__(self, car=None):
@@ -220,7 +219,7 @@ def stabilize_steering_angle(curr_steering_angle, new_steering_angle, num_of_lan
     This can be improved to use last N angles, etc
     if new angle is too different from current angle, only turn by max_angle_deviation degrees
     """
-    if num_of_lane_lines == 2 :
+    if num_of_lane_lines == 2:
         # if both lane lines detected, then we can deviate more
         max_angle_deviation = max_angle_deviation_two_lines
     else :
@@ -228,6 +227,7 @@ def stabilize_steering_angle(curr_steering_angle, new_steering_angle, num_of_lan
         max_angle_deviation = max_angle_deviation_one_lane
     
     angle_deviation = new_steering_angle - curr_steering_angle
+    # angle_deviation = 0
     if abs(angle_deviation) > max_angle_deviation:
         stabilized_steering_angle = int(curr_steering_angle
                                         + max_angle_deviation * angle_deviation / abs(angle_deviation))
@@ -343,7 +343,7 @@ def test_video(video_file):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
-    test_video('/home/pi/DeepPiCar/driver/data/tmp/video01')
-    #test_photo('/home/pi/DeepPiCar/driver/data/video/car_video_190427_110320_073.png')
+    test_video('/home/notsky/DeepPiCar/driver/data/tmp/video01')
+    #test_photo('/home/notsky/DeepPiCar/driver/data/video/car_video_190427_110320_073.png')
     #test_photo(sys.argv[1])
     #test_video(sys.argv[1])

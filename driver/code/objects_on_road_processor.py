@@ -2,9 +2,16 @@ import cv2
 import logging
 import datetime
 import time
-import edgetpu.detection.engine
+# import edgetpu.detection.engine
 from PIL import Image
 from traffic_objects import *
+
+from pycoral.adapters import common
+from pycoral.adapters import detect
+from pycoral.utils.edgetpu import make_interpreter
+
+import logging
+logging.basicConfig(level=logging.INFO)
 
 _SHOW_IMAGE = False
 
@@ -18,8 +25,8 @@ class ObjectsOnRoadProcessor(object):
     def __init__(self,
                  car=None,
                  speed_limit=40,
-                 model='/home/pi/DeepPiCar/models/object_detection/data/model_result/road_signs_quantized_edgetpu.tflite',
-                 label='/home/pi/DeepPiCar/models/object_detection/data/model_result/road_sign_labels.txt',
+                 model='/home/notsky/DeepPiCar/models/object_detection/data/model_result/road_signs_quantized_edgetpu.tflite',
+                 label='/home/notsky/DeepPiCar/models/object_detection/data/model_result/road_sign_labels.txt',
                  width=640,
                  height=480):
         # model: This MUST be a tflite model that was specifically compiled for Edge TPU.
@@ -40,7 +47,11 @@ class ObjectsOnRoadProcessor(object):
 
         # initial edge TPU engine
         logging.info('Initialize Edge TPU with model %s...' % model)
-        self.engine = edgetpu.detection.engine.DetectionEngine(model)
+
+        # self.engine = edgetpu.detection.engine.DetectionEngine(model)
+        self.interpreter = make_interpreter(model)
+        self.interpreter.allocate_tensors()
+
         self.min_confidence = 0.30
         self.num_of_objects = 3
         logging.info('Initialize Edge TPU with model done.')
@@ -83,8 +94,8 @@ class ObjectsOnRoadProcessor(object):
 
         contain_stop_sign = False
         for obj in objects:
-            obj_label = self.labels[obj.label_id]
-            processor = self.traffic_objects[obj.label_id]
+            obj_label = self.labels[obj.id]
+            processor = self.traffic_objects[obj.id]
             if processor.is_close_by(obj, self.height):
                 processor.set_car_state(car_state)
             else:
@@ -130,21 +141,46 @@ class ObjectsOnRoadProcessor(object):
         # call tpu for inference
         start_ms = time.time()
         frame_RGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img_pil = Image.fromarray(frame_RGB)
-        objects = self.engine.DetectWithImage(img_pil, threshold=self.min_confidence, keep_aspect_ratio=True,
-                                         relative_coord=False, top_k=self.num_of_objects)
+
+        # img_pil = Image.fromarray(frame_RGB)
+        # objects = self.engine.DetectWithImage(img_pil, threshold=self.min_confidence, keep_aspect_ratio=True,
+        #                                  relative_coord=False, top_k=self.num_of_objects)
+        _, input_height, input_width, _ = self.interpreter.get_input_details()[0]['shape']
+        input_tensor = self.interpreter.tensor(self.interpreter.get_input_details()[0]['index'])
+        input_tensor()[0, :, :, :] = cv2.resize(frame_RGB, (input_width, input_height))
+
+        self.interpreter.invoke()
+        output_tensors = detect.get_objects(self.interpreter, score_threshold=self.min_confidence)[:self.num_of_objects]
+        objects = [obj for obj in output_tensors if obj.score >= self.min_confidence]
+
         if objects:
             for obj in objects:
-                height = obj.bounding_box[1][1]-obj.bounding_box[0][1]
-                width = obj.bounding_box[1][0]-obj.bounding_box[0][0]
-                logging.debug("%s, %.0f%% w=%.0f h=%.0f" % (self.labels[obj.label_id], obj.score * 100, width, height))
-                box = obj.bounding_box
-                coord_top_left = (int(box[0][0]), int(box[0][1]))
-                coord_bottom_right = (int(box[1][0]), int(box[1][1]))
+                # width = obj.bbox[1][0] - obj.bbox[0][0]
+                # height = obj.bbox[1][1] - obj.bbox[0][1]
+                width = obj.bbox[2] - obj.bbox[0]
+                height = obj.bbox[3] - obj.bbox[1]
+                logging.debug("%s, %.0f%% w=%.0f h=%.0f" % (self.labels[obj.id], obj.score * 100, width, height))
+                box = obj.bbox
+                # logging.info(f"BBOXBBOXBBOX: {box}")
+                coord_top_left = (int(box.xmin), int(box.ymin))
+                coord_bottom_right = (int(box.xmax), int(box.ymax))
                 cv2.rectangle(frame, coord_top_left, coord_bottom_right, self.boxColor, self.boxLineWidth)
-                annotate_text = "%s %.0f%%" % (self.labels[obj.label_id], obj.score * 100)
+                annotate_text = "%s %.0f%%" % (self.labels[obj.id], obj.score * 100)
                 coord_top_left = (coord_top_left[0], coord_top_left[1] + 15)
                 cv2.putText(frame, annotate_text, coord_top_left, self.font, self.fontScale, self.boxColor, self.lineType)
+
+                width = obj.bbox[2] - obj.bbox[0]
+                height = obj.bbox[3] - obj.bbox[1]
+                logging.debug("%s, %.0f%% w=%.0f h=%.0f" % (self.labels[obj.id], obj.score * 100, width, height))
+                box = obj.bbox
+                print(box)
+                coord_top_left = (int(box.xmin), int(box.ymin))
+                coord_bottom_right = (int(box.xmax), int(box.ymax))
+                cv2.rectangle(frame, coord_top_left, coord_bottom_right, self.boxColor, self.boxLineWidth)
+                annotate_text = "%s %.0f%%" % (self.labels[obj.id], obj.score * 100)
+                coord_top_left = (coord_top_left[0], coord_top_left[1] + 15)
+                cv2.putText(frame, annotate_text, coord_top_left, self.font, self.fontScale, self.boxColor,
+                            self.lineType)
         else:
             logging.debug('No object detected')
 
@@ -181,19 +217,19 @@ def test_photo(file):
 def test_stop_sign():
     # this simulates a car at stop sign
     object_processor = ObjectsOnRoadProcessor()
-    frame = cv2.imread('/home/pi/DeepPiCar/driver/data/objects/stop_sign.jpg')
+    frame = cv2.imread('/home/notsky/DeepPiCar/driver/data/objects/stop_sign.jpg')
     combo_image = object_processor.process_objects_on_road(frame)
     show_image('Stop 1', combo_image)
     time.sleep(1)
-    frame = cv2.imread('/home/pi/DeepPiCar/driver/data/objects/stop_sign.jpg')
+    frame = cv2.imread('/home/notsky/DeepPiCar/driver/data/objects/stop_sign.jpg')
     combo_image = object_processor.process_objects_on_road(frame)
     show_image('Stop 2', combo_image)
     time.sleep(2)
-    frame = cv2.imread('/home/pi/DeepPiCar/driver/data/objects/stop_sign.jpg')
+    frame = cv2.imread('/home/notsky/DeepPiCar/driver/data/objects/stop_sign.jpg')
     combo_image = object_processor.process_objects_on_road(frame)
     show_image('Stop 3', combo_image)
     time.sleep(1)
-    frame = cv2.imread('/home/pi/DeepPiCar/driver/data/objects/green_light.jpg')
+    frame = cv2.imread('/home/notsky/DeepPiCar/driver/data/objects/green_light.jpg')
     combo_image = object_processor.process_objects_on_road(frame)
     show_image('Stop 4', combo_image)
 
@@ -236,12 +272,12 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(levelname)-5s:%(asctime)s: %(message)s')
 
     # These processors contains no state
-    test_photo('/home/pi/DeepPiCar/driver/data/objects/red_light.jpg')
-    test_photo('/home/pi/DeepPiCar/driver/data/objects/person.jpg')
-    test_photo('/home/pi/DeepPiCar/driver/data/objects/limit_40.jpg')
-    test_photo('/home/pi/DeepPiCar/driver/data/objects/limit_25.jpg')
-    test_photo('/home/pi/DeepPiCar/driver/data/objects/green_light.jpg')
-    test_photo('/home/pi/DeepPiCar/driver/data/objects/no_obj.jpg')
+    test_photo('/home/notsky/DeepPiCar/driver/data/objects/red_light.jpg')
+    test_photo('/home/notsky/DeepPiCar/driver/data/objects/person.jpg')
+    test_photo('/home/notsky/DeepPiCar/driver/data/objects/limit_40.jpg')
+    test_photo('/home/notsky/DeepPiCar/driver/data/objects/limit_25.jpg')
+    test_photo('/home/notsky/DeepPiCar/driver/data/objects/green_light.jpg')
+    test_photo('/home/notsky/DeepPiCar/driver/data/objects/no_obj.jpg')
 
     # test stop sign, which carries state
     test_stop_sign()

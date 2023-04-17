@@ -5,14 +5,17 @@ import datetime
 from hand_coded_lane_follower import HandCodedLaneFollower
 from objects_on_road_processor import ObjectsOnRoadProcessor
 
+from pycoral.adapters import common, detect
+from pycoral.utils.edgetpu import make_interpreter
+
 _SHOW_IMAGE = True
 
 
 class DeepPiCar(object):
 
     __INITIAL_SPEED = 0
-    __SCREEN_WIDTH = 320
-    __SCREEN_HEIGHT = 240
+    __SCREEN_WIDTH = 320 #640
+    __SCREEN_HEIGHT = 240 #480
 
     def __init__(self):
         """ Init camera and wheels"""
@@ -26,10 +29,12 @@ class DeepPiCar(object):
         self.camera.set(4, self.__SCREEN_HEIGHT)
 
         self.pan_servo = picar.Servo.Servo(1)
+        # self.pan_servo.offset = -30  # calibrate servo to center
         self.pan_servo.offset = -30  # calibrate servo to center
         self.pan_servo.write(90)
 
         self.tilt_servo = picar.Servo.Servo(2)
+        # self.tilt_servo.offset = 20  # calibrate servo to center
         self.tilt_servo.offset = 20  # calibrate servo to center
         self.tilt_servo.write(90)
 
@@ -40,6 +45,7 @@ class DeepPiCar(object):
         logging.debug('Set up front wheels')
         self.front_wheels = picar.front_wheels.Front_Wheels()
         self.front_wheels.turning_offset = -25  # calibrate servo to center
+        # self.front_wheels.turning_offset = 22  # calibrate servo to center
         self.front_wheels.turn(90)  # Steering Range is 45 (left) - 90 (center) - 135 (right)
 
         self.lane_follower = HandCodedLaneFollower(self)
@@ -117,6 +123,7 @@ class DeepPiCar(object):
         return image
 
 
+
 ############################
 # Utility Functions
 ############################
@@ -127,8 +134,8 @@ def show_image(title, frame, show=_SHOW_IMAGE):
 
 def main():
     with DeepPiCar() as car:
-        car.drive(40)
-
+        car.drive(1)
+        # car.drive(10)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(levelname)-5s:%(asctime)s: %(message)s')

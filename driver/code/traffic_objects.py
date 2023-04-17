@@ -10,7 +10,7 @@ class TrafficObject(object):
     @staticmethod
     def is_close_by(obj, frame_height, min_height_pct=0.05):
         # default: if a sign is 10% of the height of frame
-        obj_height = obj.bounding_box[1][1]-obj.bounding_box[0][1]
+        obj_height = obj.bbox.ymax - obj.bbox.ymin
         return obj_height / frame_height > min_height_pct
 
 

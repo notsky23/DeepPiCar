@@ -24,8 +24,15 @@ def main():
     parser.add_argument(
       '--label', help='File path of label file.', required=False)
     args = parser.parse_args()
-    
+
+    # args.model = 'data/model_result/mobilenet_ssd_v1_coco_quant_postprocess_edgetpu.tflite'
     args.model = 'data/model_result/mobilenet_ssd_v2_coco_quant_postprocess_edgetpu.tflite'
+    # args.model = 'data/model_result/ssd_mobilenet_v3_small_coco.tflite'
+    # args.model = 'data/model_result/ssd_mobilenet_v3_large_coco.tflite'
+    # args.model = 'data/model_result/inception_v1_224_quant_edgetpu.tflite'
+    # args.model = 'data/model_result/spaghettinet_edgetpu_small.tflite'
+    # args.model = 'data/model_result/spaghettinet_edgetpu_large.tflite'
+    # args.model = 'data/model_result/lite-model_efficientdet_lite0_int8_1.tflite'
     args.label = 'data/model_result/coco_labels.txt'
         
     with open(args.label, 'r') as f:
@@ -33,8 +40,8 @@ def main():
         labels = dict((int(k), v) for k, v in pairs)
 
     # initialize open cv
-    IM_WIDTH = 640
-    IM_HEIGHT = 480
+    IM_WIDTH = 640 #640
+    IM_HEIGHT = 480 #480
     camera = cv2.VideoCapture(0)
     ret = camera.set(3,IM_WIDTH)
     ret = camera.set(4,IM_HEIGHT)
@@ -53,7 +60,7 @@ def main():
     min_confidence = 0.20
 
     # Create pycoral interpreter instance
-    interpreter = make_interpreter(args.model)
+    interpreter = make_interpreter(args.model, device=':0')
     interpreter.allocate_tensors()
     _, height, width, _ = interpreter.get_input_details()[0]['shape']
 
